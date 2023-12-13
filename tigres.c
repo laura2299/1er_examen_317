@@ -1,102 +1,76 @@
 #include <stdio.h>
 #include <string.h>
 #include "mpi.h"
-void concatenar(char c,char *cadena){
-  char cadenaT[2];
-  cadenaT[0]=c;
-  cadenaT[1]='\0';
-  strcat(cadena,cadenaT);
+
+#define MAX_PALABRAS 9 // Tamaño máximo de palabras en cada lista
+
+void concatenar(char c, char *cadena) {
+    char cadT[1];
+    cadT[0] = c;
+   
+    strcat(cadena, cadT);
 }
-int main(int argc, char *argv[]){
-int procesador,nprocesador,i,suma;
-int nenvio=0,vrecepcion;
-char frase[]="tres tristes tigres trigaban trigo por culpa del bolivar";
-int n=strlen(frase);
-char a[50]="";
-char b[50]="";
-MPI_Init(&argc,&argv);
-MPI_Comm_rank(MPI_COMM_WORLD,&procesador);
-MPI_Comm_size(MPI_COMM_WORLD,&nprocesador);
-int f=n/(nprocesador);
-if(procesador==0){
-  for(i=(procesador)f;i<f(procesador+1);i++){
-	if((frase[i]==' ')){
-	  if(nenvio%2==0){
-	     concatenar(' ',a);
-	  }
-	  else{
-	     concatenar(' ',b);
-	  }
-	  nenvio+=1;
-	}
-	else{
-	  if(nenvio%2==0){
-	     concatenar(frase[i],a);
-	  }
-	  else{
-	     concatenar(frase[i],b);
-	  }
-	}
-   }
-   MPI_Send(&nenvio,1,MPI_INT,1,0,MPI_COMM_WORLD);
-   MPI_Send(&a,f,MPI_CHAR,1,0,MPI_COMM_WORLD);
-   MPI_Send(&b,f,MPI_CHAR,1,0,MPI_COMM_WORLD);
-}
-else{
- if(procesador==nprocesador-1){
-  MPI_Recv(&nenvio,1,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  MPI_Recv(&a,f,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  MPI_Recv(&b,f,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  for(i=(procesador)*f;i<n;i++){
-	if((frase[i]==' ')){
-          if(nenvio%2==0){
-	     concatenar(' ',a);
-	  }
-	  else{
-	     concatenar(' ',b);
-	  }
-	  nenvio+=1;
-	}
-	else{
-	  if(nenvio%2==0){
-	     concatenar(frase[i],a);
-	  }
-	  else{
-	     concatenar(frase[i],b);
-	  }
-	}
-       
-   }
-  printf("%s\n",a);
-  printf("%s\n",b);
- }
- else{
-  MPI_Recv(&nenvio,f,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  MPI_Recv(&a,f,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  MPI_Recv(&b,f,MPI_INT,procesador-1,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-  for(i=(procesador)f;i<f(procesador+1);i++){
-	if((frase[i]==' ')){
-	  if(nenvio%2==0){
-	     concatenar(' ',a);
-	  }
-	  else{
-	     concatenar(' ',b);
-	  }
-	  nenvio+=1;
-	}
-	else{
-	  if(nenvio%2==0){
-	     concatenar(frase[i],a);
-	  }
-	  else{
-	     concatenar(frase[i],b);
-	  }
-	}
-   }
-  MPI_Send(&nenvio,1,MPI_INT,procesador+1,0,MPI_COMM_WORLD);
-  MPI_Send(&a,f,MPI_INT,procesador+1,0,MPI_COMM_WORLD);
-  MPI_Send(&b,f,MPI_INT,procesador+1,0,MPI_COMM_WORLD);	
-}
-}
-MPI_Finalize();
+
+int main(int argc, char *argv[]) {
+    int procesador, nprocesador, i, sw = 0;
+    int envio = 0, vrecepcion;
+    char frase[] = "tres tristes tigres trigaban trigo por culpa del bolivar";
+    int n = strlen(frase);
+    char lista1[MAX_PALABRAS][50];
+    char lista2[MAX_PALABRAS][50];
+
+    char a[50] = "";
+    char b[50] = "";
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &procesador);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocesador);
+
+    int f = n / nprocesador;
+
+    // Divide la carga de trabajo entre los procesos MPI
+    MPI_Scatter(frase, f, MPI_CHAR, a, f, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+    for (i = 0; i < f; i++) {
+        if (a[i] == ' ') {
+            if (envio % 2 == 0) {
+                concatenar(' ', lista1[i]);
+            } else {
+                concatenar(' ', lista2[i]);
+            }
+            envio += 1;
+        } else {
+            if (envio % 2 == 0) {
+                concatenar(a[i], lista1[i]);
+            } else {
+                concatenar(a[i], lista2[i]);
+            }
+        }
+    }
+
+    // Combina los resultados de cada proceso MPI
+    char lista1_total[nprocesador][50];
+    char lista2_total[nprocesador][50];
+
+    MPI_Gather(lista1, f, MPI_CHAR, lista1_total, f, MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Gather(lista2, f, MPI_CHAR, lista2_total, f, MPI_CHAR, 0, MPI_COMM_WORLD);
+	
+    MPI_Finalize();
+
+    // Proceso 0 imprime las listas
+    if (procesador == 0) {
+        printf("Lista 1: ");
+        for (int j = 0; j < n; j++) {
+            printf("%s ", lista1_total[j]);
+        }
+        printf("\n");
+
+        printf("Lista 2: ");
+        for (int j = 0; j < n; j++) {
+            printf("%s ", lista2_total[j]);
+        }
+        printf("\n");
+    }
+
+    return 0;
 }
